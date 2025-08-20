@@ -1,0 +1,8 @@
+{
+  "allenai/PRIMERA-multinews/convosumm/reddit": "PRIMERA-ConvoSumm/convosumm/reddit",
+  "SummN-MultiNews/convosumm/reddit": "SummN-ConvoSumm/convosumm/reddit",
+  "ConvoSumm-MultiNews/convosumm/reddit": "ConvoSumm-ConvoSumm/convosumm/reddit",
+  "PRIMERA-ConvoSumm/multinews": "allenai/PRIMERA-multinews/multinews",
+  "SummN-ConvoSumm/multinews": "SummN-MultiNews/multinews",
+  "ConvoSumm-ConvoSumm/multinews": "ConvoSumm-MultiNews/multinews"
+}
