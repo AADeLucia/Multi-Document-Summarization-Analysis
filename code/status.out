@@ -1,0 +1,421 @@
+On task 1: allenai/PRIMERA-multinews-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 2: allenai/PRIMERA-multixscience-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 3: PRIMERA-ConvoSumm-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 4: SummN-MultiNews-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 5: SummN-ConvoSumm-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 6: ConvoSumm-ConvoSumm-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 7: ConvoSumm-MultiNews-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 8: ConvoSumm-MultiXScience-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 9: SummN-MultiXScience-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 10: ground_truth-multinews_plus
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 11: ICL-multinews_plus
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 12: ICL-convosumm/reddit-multinews_plus
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 13: ICL-multinews-multinews_plus
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 14: ICL-multinews_plus-multinews_plus
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 15: ICL-multixscience-multinews_plus
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 16: allenai/PRIMERA-multinews-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 17: allenai/PRIMERA-multixscience-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 18: PRIMERA-ConvoSumm-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 19: SummN-MultiNews-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 20: SummN-ConvoSumm-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 21: ConvoSumm-ConvoSumm-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 22: ConvoSumm-MultiNews-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 23: ConvoSumm-MultiXScience-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 24: SummN-MultiXScience-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 25: ground_truth-convosumm/reddit
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 26: ICL-convosumm/reddit
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 27: ICL-convosumm/reddit-convosumm/reddit
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 28: ICL-multinews-convosumm/reddit
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 29: ICL-multinews_plus-convosumm/reddit
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 30: ICL-multixscience-convosumm/reddit
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 31: allenai/PRIMERA-multinews-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 32: allenai/PRIMERA-multixscience-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 33: PRIMERA-ConvoSumm-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 34: SummN-MultiNews-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 35: SummN-ConvoSumm-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 36: ConvoSumm-ConvoSumm-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 37: ConvoSumm-MultiNews-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 38: ConvoSumm-MultiXScience-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 39: SummN-MultiXScience-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 40: ground_truth-multinews
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 41: ICL-multinews
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 42: ICL-convosumm/reddit-multinews
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 43: ICL-multinews-multinews
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 44: ICL-multinews_plus-multinews
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 45: ICL-multixscience-multinews
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 46: allenai/PRIMERA-multinews-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 47: allenai/PRIMERA-multixscience-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 48: PRIMERA-ConvoSumm-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 49: SummN-MultiNews-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 50: SummN-ConvoSumm-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 51: ConvoSumm-ConvoSumm-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 52: ConvoSumm-MultiNews-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 53: ConvoSumm-MultiXScience-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 54: SummN-MultiXScience-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 55: ground_truth-multixscience
+val
+Generated: Yes
+Evaluated: Yes
+test
+Generated: Yes
+Evaluated: Yes
+On task 56: ICL-multixscience
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 57: ICL-convosumm/reddit-multixscience
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 58: ICL-multinews-multixscience
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 59: ICL-multinews_plus-multixscience
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+On task 60: ICL-multixscience-multixscience
+val
+Generated: Yes
+Evaluated: No
+test
+Generated: Yes
+Evaluated: No
+Done

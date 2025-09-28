@@ -1,0 +1,53 @@
+{
+  "models": [
+    "allenai/PRIMERA-multinews",
+    "allenai/PRIMERA-multixscience",
+    "PRIMERA-ConvoSumm",
+    "SummN-MultiNews",
+    "SummN-ConvoSumm",
+    "ConvoSumm-ConvoSumm",
+    "ConvoSumm-MultiNews",
+    "ConvoSumm-MultiXScience",
+    "SummN-MultiXScience",
+    "ground_truth",
+    "ICL",
+    "ICL-convosumm/reddit",
+    "ICL-multinews",
+    "ICL-multixscience",
+    "ConvoSumm-MultiXScience2",
+    "SummN-MultiXScience2",
+    "ConvoSumm-MultiNews_Plus",
+    "SummN-MultiNews_Plus",
+    "ICL-multinews_plus",
+    "PRIMERA-MultiNews_Plus"
+  ],
+  "datasets": [
+    "convosumm/reddit",
+    "multinews",
+    "multixscience",
+    "multinews_plus"
+  ],
+  "splits": [
+    "val",
+    "test"
+  ],
+  "metrics_format": [
+    ["core", ""],
+    ["unieval", "relevance"],
+    ["unieval", "factuality"],
+    ["rouge", "rouge1"],
+    ["rouge", "rougeL"],
+    ["rouge", "rougeLsum"],
+    ["moverscore", ""],
+    ["unieval", "fluency"],
+    ["unieval", "coherence"],
+    ["unieval", "consistency"]
+  ],
+  "metrics": [
+    "core",
+    "rouge",
+    "moverscore",
+    "unieval"
+  ],
+  "format": "{model}/{dataset}/{split}"
+}

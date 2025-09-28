@@ -1,4 +1,14 @@
-# Byte-compiled / optimized / DLL files
+# Project-specific
+lightning_logs/
+results
+results_mayarr
+results_mayarr_sample
+dependencies 
+data
+models
+*.pkl
+
+#Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
 *$py.class

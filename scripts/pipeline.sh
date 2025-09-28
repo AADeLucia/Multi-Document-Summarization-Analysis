@@ -1,0 +1,76 @@
+#!/bin/bash
+#SBATCH --nodes=1
+#SBATCH --time=00:20:00
+#SBATCH --job-name=mds
+##SBATCH --partition=ica100,a100
+#SBATCH --gres=gpu:1
+#SBATCH --mem=60GB
+#SBATCH -A mdredze80_gpu
+#SBATCH --output=logs/%x.%A.%a.log
+#SBATCH --array=1-42  # Should be {# datasets} x {# models}
+
+# Environment
+module load anaconda
+conda activate mds
+source "${MDS}/scripts/helper_functions.sh"
+
+# Experiment settings
+# Loaded from config but can be overridden below
+CONFIG="${MDS}/code/experiments_mayarr.json"
+OUTPUT_BASE="${MDS}/results_mayarr"
+export CUDA_VISIBLE_DEVICES=0
+DO_PREDICT=false
+DO_EVAL=false
+
+# Parse the settings
+parse_settings "${CONFIG}"
+
+if [ -z "${SLURM_ARRAY_TASK_ID+x}" ];then
+  SLURM_ARRAY_TASK_ID=29
+  SLURM_ARRAY_TASK_MAX=29
+fi
+# Group by model for the task array
+task_id=1
+for dataset in "${DATASETS[@]}"; do
+  for model in "${MODELS[@]}"; do
+    # echo "On ${task_id}-${model}-${dataset}"
+    if [ "${task_id}" -eq "${SLURM_ARRAY_TASK_ID}" ];then
+      for split in "${SPLITS[@]}"; do
+        echo "On ${task_id}-${model}-${dataset}-${split}"
+        INPUT="${MDS}/data/${dataset}/${split}.jsonl"
+        OUTPUT_DIR="${OUTPUT_BASE}/${model}/${dataset}/${split}"
+        mkdir -p "${OUTPUT_DIR}"
+
+        if [ "${DO_PREDICT}" = true ]; then
+          infer_model "${model}" "${INPUT}" "${OUTPUT_DIR}" "${dataset}"
+
+          if [ $? -ne 0 ];then
+            echo "Error during inference"
+            exit 1
+          fi
+        fi
+
+        if [ "${DO_EVAL}" = true ]; then
+          eval_generations "${INPUT}" "${OUTPUT_DIR}" "${METRICS[@]}"
+
+          if [ $? -ne 0 ];then
+            echo "Error during evaluation"
+            exit 1
+          fi
+        fi
+
+      done
+    fi
+    # Increment task counter
+    task_id=$(( task_id + 1))
+  done
+done
+
+if [ "${SLURM_ARRAY_TASK_ID}" -eq "${SLURM_ARRAY_TASK_MAX}" ]; then
+  echo "Aggregating results"
+  # python "${MDS}/code/add_ids_to_generated.py" --experiments-config "${CONFIG}" --results-dir "${OUTPUT_BASE}"
+  python "${MDS}/code/aggregate_results.py" --experiments-config "${CONFIG}" --results-dir "${OUTPUT_BASE}" --ci
+  # python "${MDS}/code/prepare_for_annotation.py" --experiments-config "${CONFIG}"
+fi
+
+echo "Done with task ${SLURM_ARRAY_TASK_ID}"
