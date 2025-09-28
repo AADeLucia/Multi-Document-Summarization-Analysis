@@ -71,11 +71,13 @@ def main():
 
     # Load config
     experiments_config = load_config(args.experiments_config)
+    logger.info(f"Loaded experiments config from {args.experiments_config}")
     output_dir = os.path.join(
         args.results_dir,
         os.path.basename(args.experiments_config).split('.')[0]
     )
     os.makedirs(output_dir, exist_ok=True)
+    logger.info(f"Saving aggregated results to {output_dir}")
 
     # Load results
     results_df = []
@@ -91,6 +93,7 @@ def main():
                 }
                 path = experiments_config["format"].replace("{model}", model).replace("{dataset}", dataset).replace("{split}", split)
                 path = f"{args.results_dir}/{path}/evaluation.json"
+                logger.debug(f"Loading {model}-{dataset}-{split} results from {path}")
                 if os.path.exists(path):
                     with open(path, "r") as f:
                         results = json.load(f)

@@ -20,7 +20,7 @@ CONFIG="${MDS}/code/experiments_mayarr.json"
 OUTPUT_BASE="${MDS}/results_mayarr"
 export CUDA_VISIBLE_DEVICES=0
 DO_PREDICT=false
-DO_EVAL=true
+DO_EVAL=false
 
 # Parse the settings
 parse_settings "${CONFIG}"
