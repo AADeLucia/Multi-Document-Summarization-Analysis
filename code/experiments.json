@@ -1,53 +1,57 @@
 {
   "models": [
-    "allenai/PRIMERA-multinews",
+    "ground_truth",
     "allenai/PRIMERA-multixscience",
     "PRIMERA-ConvoSumm",
-    "SummN-MultiNews",
-    "SummN-ConvoSumm",
-    "ConvoSumm-ConvoSumm",
-    "ConvoSumm-MultiNews",
-    "ConvoSumm-MultiXScience",
+    "PRIMERA-MultiNews_Plus",
     "SummN-MultiXScience",
-    "ground_truth",
+    "SummN-ConvoSumm",
+    "SummN-MultiNews_Plus",
+    "ConvoSumm-MultiXScience",
+    "ConvoSumm-ConvoSumm",
+    "ConvoSumm-MultiNews_Plus",
     "ICL",
     "ICL-convosumm/reddit",
-    "ICL-multinews",
     "ICL-multixscience",
-    "ConvoSumm-MultiXScience2",
-    "SummN-MultiXScience2",
-    "ConvoSumm-MultiNews_Plus",
-    "SummN-MultiNews_Plus",
-    "ICL-multinews_plus",
-    "PRIMERA-MultiNews_Plus"
+    "ICL-multinews_plus"
   ],
   "datasets": [
     "convosumm/reddit",
-    "multinews",
     "multixscience",
     "multinews_plus"
   ],
   "splits": [
-    "val",
     "test"
   ],
   "metrics_format": [
-    ["core", ""],
     ["unieval", "relevance"],
     ["unieval", "factuality"],
     ["rouge", "rouge1"],
     ["rouge", "rougeL"],
     ["rouge", "rougeLsum"],
     ["moverscore", ""],
+    ["bertscore", "f1"],
+    ["bertscore", "precision"],
+    ["bertscore", "recall"],
     ["unieval", "fluency"],
     ["unieval", "coherence"],
-    ["unieval", "consistency"]
+    ["unieval", "consistency"],
+    ["compression", "sentence"],
+    ["compression", "token"],
+    ["prometheus", "fluency"],
+    ["prometheus", "coherence"],
+    ["prometheus", "consistency"],
+    ["prometheus", "relevance"],
+    ["prometheus", "factuality"],
+    ["prometheus", "coverage"]
   ],
   "metrics": [
-    "core",
     "rouge",
+    "compression",
     "moverscore",
-    "unieval"
+    "bertscore",
+    "unieval",
+    "prometheus"
   ],
   "format": "{model}/{dataset}/{split}"
 }

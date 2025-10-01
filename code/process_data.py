@@ -28,7 +28,7 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-DATASETS = ["convosumm", "multinews", "multixscience", "multinews_plus"]
+DATASETS = ["convosumm", "multixscience", "multinews_plus"]
 
 
 def flatten_threads(threads):
@@ -45,7 +45,7 @@ def flatten_threads(threads):
 
 
 def process_convosumm(data_sources=["reddit"]):
-    data_dir = f"{os.environ['MDS']}/data/convosumm/convosumm-data-original/data-non-processed"
+    data_dir = f"{os.environ['MDS']}/data/convosumm/data-non-processed"
     output_dir = f"{os.environ['MDS']}/data/convosumm"
     logger.info(f"On ConvoSumm. Writing to {output_dir}")
 
@@ -157,14 +157,15 @@ def process_multinews_plus():
         }
     }
     """
-    data_dir = f"{os.environ['MDS']}/dependencies/multi_news_plus/cleansing/cleansed_data"
+    data_dir = f"{os.environ['MDS']}/data/multinews_plus/repo/cleansing/cleansed_data"
     output_dir = f"{os.environ['MDS']}/data/multinews_plus"
     os.makedirs(output_dir, exist_ok=True)
     logger.info(f"On MultiNews+. Writing to {output_dir}")
     
     # Remove existing files
     for split in ["val", "test", "train"]:
-        os.remove(f"{output_dir}/{split}.jsonl")
+        if os.path.exists(f"{output_dir}/{split}.jsonl"):
+            os.remove(f"{output_dir}/{split}.jsonl")
 
     split_counters = {}
     for file_path in tqdm(os.listdir(data_dir)):
@@ -198,7 +199,7 @@ def process_multixscience():
     """
     Data description https://github.com/yaolu/Multi-XScience/tree/master
     """
-    data_dir = f"{os.environ['MDS']}/data/multixscience/original"
+    data_dir = f"{os.environ['MDS']}/data/multixscience/repo/data"
     output_dir = f"{os.environ['MDS']}/data/multixscience"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -263,8 +264,6 @@ if __name__ == "__main__":
     for dataset in args.dataset:
         if dataset == "convosumm":
             process_convosumm()
-        elif dataset == "multinews":
-            process_multinews()
         elif dataset == "multixscience":
             process_multixscience()
         elif dataset == "multinews_plus":

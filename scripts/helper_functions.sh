@@ -1,4 +1,6 @@
 #!/bin/bash
+# Functions for the main scripts
+# Need to be sourced (e.g. source helper_functions.sh)
 
 parse_settings() {
   local config
@@ -17,6 +19,27 @@ parse_settings() {
   str="$(jq -r '.metrics | @sh' "${config}")"
   declare -ga METRICS="($str)"
 }
+
+parse_settings_from_json() {
+  local json_str="$1"
+  local str
+
+  str="$(jq -n --argjson data "$json_str" '$data.DATASET | @sh ' | sed "s/'//g")"
+  declare -ga DATASET="($str)"
+
+  str="$(jq -n --argjson data "$json_str" '$data.MODEL | @sh' | sed "s/'//g")"
+  declare -ga MODEL="($str)"
+
+#  str="$(jq -n --argjson data "$json_str" '$data.SPLITS | @sh' | sed "s/'//g")"
+#  declare -ga SPLITS="($str)"
+#
+  str="$(jq -n --argjson data "$json_str" '$data.SPLITS | @sh' | sed "s/[\"']//g")"
+  read -a SPLITS <<< "$str"
+
+  str="$(jq -n --argjson data "$json_str" '$data.METRICS | @sh' | sed "s/[\"']//g")"
+  read -a METRICS <<< "$str"
+}
+
 
 infer_model() {
   local model="$1"
@@ -79,6 +102,8 @@ infer_model() {
     python "${MDS}/code/parse_primera_output.py" \
       --input-dir "${output}/raw_generations" \
       --output-file "${output}/generated.jsonl"
+
+    echo "Parsed generations saved to ${output}/generated.jsonl"
   fi
 
   # Case: Ground truth
@@ -220,14 +245,21 @@ eval_generations() {
   # https://askubuntu.com/a/995110
   local input="$1"
   local output="$2"
-  shift 2
+  local overwrite="$3"
+  shift 3
   local metrics=("$@")
 
   conda activate mds
+
+  local overwrite_flag=""
+  if [ "${overwrite}" = "true" ]; then
+    overwrite_flag="--overwrite"
+  fi
 
   python "${MDS}/code/evaluate_generations.py" \
     --input-data "${input}" \
     --output-data "${output}/generated.jsonl" \
     --output-dir "${output}" \
-    --metrics "${metrics[@]}"
+    --metrics "${metrics[@]}" \
+    ${overwrite_flag}
 }

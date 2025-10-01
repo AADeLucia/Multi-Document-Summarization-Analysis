@@ -9,6 +9,13 @@
 #SBATCH --output=logs/%x.%A.%a.log
 #SBATCH --array=1-42  # Should be {# datasets} x {# models}
 
+# Load environment variables from .env file if it exists
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+fi
+
 # Environment
 module load anaconda
 conda activate mds

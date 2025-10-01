@@ -1,4 +1,5 @@
 #!/bin/bash
+# Should be run AFTER starting the vLLM server with serve_vllm.sh
 #SBATCH --nodes=1
 #SBATCH --time=2-00:00:00
 #SBATCH --job-name=eval-prom

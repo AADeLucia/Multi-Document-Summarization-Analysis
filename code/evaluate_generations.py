@@ -17,6 +17,7 @@ import evaluate
 import torch
 import numpy as np
 import spacy
+from bert_score import BERTScorer
 nlp = spacy.load("en_core_web_sm")
 
 
@@ -31,11 +32,7 @@ logging.basicConfig(
 
 sys.path.append(f"{os.environ['MDS']}/code")
 from project_utils import load_generations, CustomJSONEncoder
-try:
-    from calculate_factscore import calculate_factscore
-except ImportError as err:
-    logger.error(f"Could not import {err}. Make sure correct environment is activated for this module.")
-METRICS = ["rouge", "unieval", "moverscore", "dispersion", "factscore-md", "factscore", "core", "compression", "prometheus"]
+METRICS = ["rouge", "unieval", "moverscore", "bertscore", "compression", "prometheus"]
 
 
 def eval_rouge(dataset):
@@ -46,11 +43,12 @@ def eval_rouge(dataset):
     try:
         rouge = evaluate.load('rouge', keep_in_memory=True)
     except FileNotFoundError as err:
-        rouge = evaluate.load(f"{os.environ['HF_HOME']}/metrics/rouge", keep_in_memory=True)
+        rouge = evaluate.load(f"{os.environ['HF_HUB_CACHE']}/metrics/rouge", keep_in_memory=True)
     results = rouge.compute(
         predictions=dataset["predictions"],
         references=dataset["reference"],
-        use_aggregator=False
+        use_aggregator=False,
+        use_stemmer=True
     )
     overall = {
         key: np.mean(results[key]) for key in results
@@ -99,6 +97,40 @@ def eval_moverscore(
     return scores
 
 
+def eval_bertscore(
+        dataset: Dict[str, Any],
+        device: str,
+        model_type: str = "microsoft/deberta-xlarge-mnli",
+        batch_size: int = 64,
+) -> Dict[str, Any]:
+    scorer = BERTScorer(
+        model_type=model_type,
+        device=device,
+        nthreads=4,
+        lang="en",
+        batch_size=batch_size,
+        rescale_with_baseline=True
+    )
+    P, R, F1 = scorer.score(
+        dataset["predictions"],
+        dataset["reference"],
+        verbose=True
+    )
+    individual_scores = []
+    for p, r, f in zip(P.tolist(), R.tolist(), F1.tolist()):
+        individual_scores.append({"precision": p, "recall": r, "f1": f})
+
+    scores = {
+        "individual": individual_scores,
+        "overall": {
+            "precision": np.average(P).item(),
+            "recall": np.average(R).item(),
+            "f1": np.average(F1).item()
+        }
+    }
+    return scores
+
+
 def eval_unieval(dataset, device):
     """
     https://github.com/maszhongming/UniEval/tree/main
@@ -119,7 +151,7 @@ def eval_unieval(dataset, device):
         ref_list=dataset["reference"]
     )
     # Evaluator for summarization task
-    evaluator = get_evaluator("summarization", device=device, model_path=f"{os.environ['MDS']}/dependencies/UniEval/unieval-sum")
+    evaluator = get_evaluator("summarization", device=device)
     eval_scores = evaluator.evaluate(data, print_result=True, dims=["coherence", "fluency", "relevance"], overall=False)
 
     # Evaluator for factual consistency task
@@ -143,77 +175,6 @@ def eval_unieval(dataset, device):
         },
         "individual": eval_scores
     }
-    return scores
-
-
-def eval_dispersion(dataset, device, output_dir, nmax=10):
-    """Parses output from calculate_dispersion_acc if exists"""
-    from calculate_dispersion_aac import DispersionScorer
-    dispersion_dir = os.path.join(output_dir, "dispersion")
-    dispersion_file = os.path.join(dispersion_dir, "source_coverage.jsonl")
-
-    if not os.path.exists(dispersion_file):
-        logger.info(f"{dispersion_file} does not exist. Calculating dispersion score.")
-        os.makedirs(dispersion_dir, exist_ok=True)
-        scorer = DispersionScorer(f"{os.environ['MDS']}/dependencies/multi_mds", dispersion_dir)
-        scorer.compute(dataset, device)
-    # Code below is from https://github.com/ariecattan/multi_mds/blob/main/get_aac_scores.py
-    logger.info(f"Parsing dispersion scores from {dispersion_dir}")
-
-    # "we normalize the AAC by the maximum number of required source document, nMAX."
-    # "It is important to note that we avoid normalizing our dispersion metric by the number of source
-    # documents in a topic, aiming to better reflect the absolute degree of dispersity."
-    def get_cov_score(row, length):
-        scores = []
-        for i in range(length):
-            score = len(row[i]) / len(row["alignment"]) if len(row["alignment"]) > 0 else 1
-            scores.append(score)
-        return pd.Series(scores)
-
-    df = pd.read_json(dispersion_file, lines=True)
-    # Check if nmax is appropriate for number of columns
-    num_cols = len(df.columns) - 2
-    nmax = num_cols if nmax > num_cols else nmax
-    logger.info(f"Using {nmax=} for dispersion AAC calculations")
-    df_coverage_score = df.apply(lambda row: get_cov_score(row, nmax), axis=1)
-    # AAC = (1/nMax) * sum_1^nMax(1 - coverage_i)
-    individual = (1 - df_coverage_score).sum(axis=1).divide(nmax)
-    scores = {
-        "overall": individual.mean(),
-        "individual": individual.tolist()
-    }
-    return scores
-
-
-def eval_factscore(output_dir, setting, args):
-    """Parses output from calculate_factscore if it exists"""
-    output_file = f"{output_dir}/evaluation_factscore_{setting}.json"
-    if not os.path.exists(output_file):
-        logger.warning(f"FactScore results not found at {output_file}. Calculating.")
-        if setting == "single":
-            model_name = "retrieval+llama+npm"
-        else:
-            model_name = "retrieval+llama"
-
-        dataset = re.search("data/([a-zA-Z/]+)/(?:test|val|train)[.]jsonl", args.input_data)
-        if dataset:
-            dataset = dataset.groups()[0]
-        else:
-            logger.error(f"Could not parse dataset from path {args.input_data}")
-            exit(1)
-
-        calculate_factscore(
-            input_data=args.input_data,
-            output_data=args.output_data,
-            dataset=dataset,
-            output_dir=args.output_dir,
-            mode=setting,
-            model_name=model_name,
-            debug=args.debug
-        )
-
-    with open(output_file, "r") as f:
-        scores = json.load(f)
     return scores
 
 
@@ -360,6 +321,8 @@ def calculate_metric(metric, dataset, device, args):
         return eval_factscore(args.output_dir, setting, args)
     if "prometheus" in metric:
         return eval_prometheus(args.output_dir)
+    if metric == "bertscore":
+        return eval_bertscore(dataset, device=device)
     if metric == "compression":
         return eval_compression(dataset)
     logger.error(f"Unknown metric {metric}")

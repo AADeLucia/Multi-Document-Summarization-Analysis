@@ -1,7 +1,7 @@
 #!/bin/bash
 #SBATCH --job-name=serve-vllm
 #SBATCH --time=2-00:00:00
-#SBATCH --partition=ica100
+#SBATCH --partition=a100,h100
 #SBATCH --gres=gpu:4
 #SBATCH --nodes=1
 #SBATCH --mem=80GB
@@ -18,7 +18,7 @@ for i in $(seq 1 "$(( SLURM_JOB_GPUS - 1 ))"); do
 done
 
 export CUDA_VISIBLE_DEVICES
-export PROJECT_DIR="/home/adeluci2/projects/vllm-server"
+export PROJECT_DIR="${MDS}/vllm-server"
 export PORT=22659
 export MODEL_NAME="prometheus-eval/prometheus-bgb-8x7b-v2.0"
 
