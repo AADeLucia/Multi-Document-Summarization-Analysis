@@ -46,7 +46,10 @@ def aggregate_results(data: List[Union[int, float]], calculate_ci: bool = False)
             method='BCa',
             random_state=42
         )
-        res["ci"] = (bootstrap_result.confidence_interval.low, bootstrap_result.confidence_interval.high)
+        if np.isnan(bootstrap_result.confidence_interval.low):
+            res["ci"] = (res["mean"], res["mean"])
+        else:
+            res["ci"] = (bootstrap_result.confidence_interval.low, bootstrap_result.confidence_interval.high)
         res["ci_std"] = bootstrap_result.standard_error
     return res
 

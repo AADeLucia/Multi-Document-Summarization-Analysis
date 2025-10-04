@@ -4,84 +4,51 @@ Evaluate summaries with Prometheus 2
 Paper: https://aclanthology.org/2024.emnlp-main.248/
 Original code: https://github.com/prometheus-eval/prometheus-eval/tree/main
 """
-import os
-from typing import List, Tuple, Dict, Optional, Callable, Any, Union
-from functools import partial
-import asyncio
-from argparse import ArgumentParser
+from typing import List, Dict, Any, Optional, Union, Tuple
 import logging
+from argparse import ArgumentParser
+import os
 import sys
 import time
+import random
+import re
+import json
 
-from openai import (
-    AsyncOpenAI,
-    APIError,
-    BadRequestError,
-    APIConnectionError
-)
-from openai.types.chat.chat_completion import ChatCompletion
-import nest_asyncio
+from tqdm import tqdm
+import torch
+from torch.utils.data import Dataset, DataLoader
+from transformers import AutoTokenizer, AutoModelForCausalLM
 import jsonlines
 from prometheus_eval.prompts import (
     ABSOLUTE_PROMPT,
     ABSOLUTE_PROMPT_WO_REF,
     ABS_SYSTEM_PROMPT,
-    SCORE_RUBRIC_TEMPLATE,
-    REL_SYSTEM_PROMPT
+    SCORE_RUBRIC_TEMPLATE
 )
-import backoff
-import requests
-from tqdm import tqdm
 
 sys.path.append(f"{os.environ['MDS']}/code")
 from project_utils import load_generations
 
-# Fix async errors
-nest_asyncio.apply()
-
 # Setup logging
-logger = logging.getLogger()
 logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s",
     datefmt="%m/%d/%Y %H:%M:%S",
     handlers=[logging.StreamHandler(sys.stdout)],
     level=logging.INFO
 )
+logger = logging.getLogger(__name__)
 
-# Re-written version of the prompt that works better
-RELATIVE_PROMPT_WO_REF = """### Task Description:
-You will be given an instruction, a score rubric representing an evaluation criterion, and finally two responses from different language models for comparison.
 
-1. Write a detailed feedback that assesses the relative quality of the responses strictly based on the given score rubric, not evaluating in general.
-2. After writing a feedback, select which model performed better according to the score rubric.
-3. The output format should look as follows: (write a feedback for criteria) [RESULT] (A or B)
-4. Please do not generate any other opening, closing, and explanations.
-
-### Instruction:
-{instruction}
-
-### Score Rubric:
-{rubric}
-
-### Response from Model A:
-{response_A}
-
-### Response from Model B:
-{response_B}
-
----
-
-Please compare the two responses according to the score rubric above.
-
-### Feedback: """
-
+###################
+# Prompts and Rubrics
+###################
 # Instructions modified from the icl_experiments.py
-INSTRUCTION_WO_SOURCE = """You are a multi-document summarizer. When given a list of DOCUMENTS, you provide a SUMMARY that incorporates all of the documents."""
-INSTRUCTION = INSTRUCTION_WO_SOURCE + """Write a summary that incorporates all of the following documents:
+INSTRUCTION = """
+Write a summary that incorporates all of the following documents:
 
 ### DOCUMENTS
 {source}
-"""
+""".strip()
 
 RUBRICS = {
     # # Modified from DUC rating
@@ -148,183 +115,220 @@ RUBRICS = {
 DIMENSIONS = list(RUBRICS.keys())
 
 
+###################
+# Evaluator Class
+###################
 class PrometheusEvaluator(object):
     def __init__(
             self,
-            api_base: str,
             model_name: str = "prometheus-eval/prometheus-bgb-8x7b-v2.0",
-            batch_size: int = 8,
+            include_reference: bool = True,
+            dimensions: List[str] = DIMENSIONS,
+            batch_size: int = 4,
             temperature: float = 0.9,
             max_tokens: int = 1024,
             seed: int = 42,
             top_p: float = 1.0,
-            repetition_penalty: float = 1.03,
-            sleep_time: int = 10
+            device: str = "auto",
+            torch_dtype: str = "auto",
+            repetition_penalty: float = 1.03
     ):
         self.model_name = model_name
-        self.api_base = api_base
         self.batch_size = batch_size
-        self.sleep_time = sleep_time
-        self.client = AsyncOpenAI(
-            base_url=self.api_base
-        )
-        # Generation settings from prometheus_eval.utils are top-p=0.9 and temperature=1.0
-        self.client_call = partial(
-            self.client.chat.completions.create,
-            model=self.model_name,
-            max_tokens=max_tokens,
-            seed=seed,
-            temperature=temperature,
-            top_p=top_p,
-            extra_body={"repetition_penalty": repetition_penalty, "best_of": 1}
-        )
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.seed = seed
+        self.top_p = top_p
+        self.include_reference = include_reference
+        self.repetition_penalty = repetition_penalty
+        self.dimensions = dimensions
 
-    def format_prompt_absolute(
-            self,
-            generation: str,
-            instruction: str,
-            rubric_data: Dict[str, str],
-            reference_generation: Optional[str],
-    ) -> str:
-        # Format input for model
-        score_rubric = SCORE_RUBRIC_TEMPLATE.format(**rubric_data)
-        if reference_generation:
-            prompt = ABSOLUTE_PROMPT.format(
-                instruction=instruction,
-                rubric=score_rubric,
-                response=generation,
-                reference_answer=reference_generation
-            )
+        # Set up device
+        if device == "auto":
+            self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
-            prompt = ABSOLUTE_PROMPT_WO_REF.format(
-                instruction=instruction,
-                rubric=score_rubric,
-                response=generation,
-            )
-        # Add system prompt as header because Mistral doesn't accept system prompts
-        prompt = ABS_SYSTEM_PROMPT + "\n\n" + prompt
-        return prompt
+            self.device = device
 
-    def format_prompt_relative(
-            self,
-            generation_A: str,
-            generation_B: str,
-            instruction: str,
-            rubric_data: Dict[str, str]
-    ) -> str:
-        # Format input for model
-        score_rubric = SCORE_RUBRIC_TEMPLATE.format(**rubric_data)
-        prompt = RELATIVE_PROMPT_WO_REF.format(
-            instruction=instruction,
-            rubric=score_rubric,
-            response_A=generation_A,
-            response_B=generation_B
+        # Set up dtype
+        if torch_dtype == "auto":
+            self.torch_dtype = torch.float16 if self.device == "cuda" else torch.float32
+        else:
+            self.torch_dtype = getattr(torch, torch_dtype)
+
+        logger.info(f"Loading model {model_name} on {self.device} with dtype {self.torch_dtype}")
+
+        # Load tokenizer and model
+        # Hard-code the max tokens
+        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
+        if self.tokenizer.pad_token is None:
+            self.tokenizer.pad_token = self.tokenizer.eos_token
+        self.tokenizer.model_max_length = 32768 - self.max_tokens
+        logger.debug(f"Tokenizer max length: {self.tokenizer.model_max_length}")
+
+        self.model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            dtype=self.torch_dtype,
+            device_map="auto" if self.device == "cuda" else None,
+            trust_remote_code=True
         )
-        # Add system prompt as header because Mistral doesn't accept system prompts
-        prompt = REL_SYSTEM_PROMPT + "\n\n" + prompt
-        return prompt
 
-    def absolute_grade(
-            self,
-            generation: List[str],
-            instruction: Union[str, List[str]],
-            rubric_data: Union[Dict[str, str], List[Dict[str, str]]],
-            reference_generation: Optional[List[str]] = None,
-    ) -> List[Dict[str, Any]]:
-        # Format prompts
-        if not reference_generation:
-            reference_generation = [None] * len(generation)
-        if isinstance(instruction, str):
-            instruction = [instruction] * len(generation)
-        if isinstance(rubric_data, Dict):
-            rubric_data = [rubric_data] * len(generation)
-        prompts = [
-            self.format_prompt_absolute(
-                generation=gen,
-                reference_generation=ref,
-                instruction=ins,
-                rubric_data=rub
+        if self.device == "cpu":
+            self.model = self.model.to(self.device)
+
+        self.model.eval()
+
+        # Set random seed
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed(seed)
+
+    def format_grader_instance(self, dataset_entry: Dict[str, Any]) -> List[Dict[str, Any]]:
+        """Format a single grading instance"""
+        # 1. Prepare the instruction
+        source_docs = dataset_entry["source"]
+        docs = "\n\nDocument: ".join(source_docs)
+        docs = "Document: " + docs
+        instruction = INSTRUCTION.format(source=docs)
+
+        # 2. Get generation and reference
+        generation = dataset_entry["generated"]
+        reference = dataset_entry["target"]
+
+        # 3. For each dimension, prepare the rubric and prompt
+        prompts = []
+        for dim in self.dimensions:
+            rubric = RUBRICS[dim]
+            score_rubric = SCORE_RUBRIC_TEMPLATE.format(**rubric)
+            if self.include_reference:
+                prompt = ABSOLUTE_PROMPT.format(
+                    instruction=instruction,
+                    response=generation,
+                    reference_answer=reference,
+                    rubric=score_rubric
+                )
+            else:
+                prompt = ABSOLUTE_PROMPT_WO_REF.format(
+                    instruction=instruction,
+                    response=generation,
+                    rubric=score_rubric
+                )
+            # Git Repo demo prepends prompt with the system prompt
+            prompt = ABS_SYSTEM_PROMPT + "\n\n" + prompt
+
+            p_formatted = {
+                "id": dataset_entry["id"],
+                "dimension": dim,
+                "prompt": prompt
+            }
+
+            # Check if the input will be truncated
+            tokens = self.tokenizer(prompt, return_tensors="pt", padding=False, truncation=False)
+            if tokens['input_ids'].shape[1] > self.tokenizer.model_max_length:
+                logger.warning(
+                    f"Input for ID {m['id']} (dimension: {m['dimension']}) will be truncated: "
+                    f"{tokens['input_ids'].shape[1]} tokens > {self.tokenizer.model_max_length} max length"
+                )
+                p_formatted["truncated"] = True
+
+            prompts.append(p_formatted)
+        return prompts
+
+    def batch_generate(self, batch: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Generate responses for a batch of the dataset"""
+        # Prepare inputs
+        inputs, meta = [], []
+        for dataset_entry in batch:
+            formatted = self.format_grader_instance(dataset_entry)
+            prompts = [f["prompt"] for f in formatted]
+            meta.extend(formatted)
+            for prompt in prompts:
+                messages = [
+                    {"role": "user", "content": prompt},
+                ]
+                p = self.tokenizer.apply_chat_template(
+                    messages,
+                    tokenize=False,
+                    add_generation_prompt=True
+                )
+                inputs.append(p)
+        tokenized_inputs = self.tokenizer(
+            inputs,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+        ).to(self.device)
+
+        # Generate
+        with torch.no_grad():
+            outputs = self.model.generate(
+                **tokenized_inputs,
+                max_new_tokens=self.max_tokens,
+                temperature=self.temperature,
+                top_p=self.top_p,
+                do_sample=True,
+                repetition_penalty=self.repetition_penalty,
+                pad_token_id=self.tokenizer.pad_token_id,
+                eos_token_id=self.tokenizer.eos_token_id
             )
-            for gen, ref, ins, rub in zip(generation, reference_generation, instruction, rubric_data)
-        ]
-        messages = [
-            [
-                {"role": "user", "content": prompt}
-            ] for prompt in prompts
-        ]
-        grades = self.batch_grade(messages)
-        return grades
 
-    def relative_grade(
-            self,
-            generation_A: List[str],
-            generation_B: List[str],
-            instruction: Union[str, List[str]],
-            rubric_data: Union[Dict[str, str], List[Dict[str, str]]]
-    ) -> List[Dict[str, Any]]:
-        if isinstance(instruction, str):
-            instruction = [instruction] * len(generation_A)
-        if isinstance(rubric_data, Dict):
-            rubric_data = [rubric_data] * len(generation_A)
-        # Format prompts
-        prompts = [
-            self.format_prompt_relative(
-                generation_A=ga,
-                generation_B=gb,
-                instruction=ins,
-                rubric_data=rub
-            )
-            for ga, gb, ins, rub in zip(generation_A, generation_B, instruction, rubric_data)
-        ]
-        messages = [
-            [
-                {"role": "user", "content": prompt}
-            ] for prompt in prompts
-        ]
-        grades = self.batch_grade(messages)
-        return grades
+        # Decode outputs (skip input tokens)
+        input_lengths = tokenized_inputs['input_ids'].shape[1]
+        processed_output = []
+        for output, m in tqdm(zip(outputs, meta), desc="Decoding outputs", total=len(meta), disable=logger.level > logging.DEBUG):
+            out = m.copy()
+            generated_tokens = output[input_lengths:]
+            generated_text = self.tokenizer.decode(generated_tokens, skip_special_tokens=True)
+            feedback, score = self._parse_output_absolute(generated_text)
 
-    @backoff.on_exception(
-        backoff.expo,
-        requests.exceptions.RequestException,
-        max_time=60
-    )
-    async def _batch(self, messages: List[List[Dict[str, str]]]) -> List[ChatCompletion]:
-        async_responses = [
-            self.client_call(
-                messages=x,
-            )
-            for x in messages
-        ]
-        return await asyncio.gather(*async_responses, return_exceptions=True)
+            out["generated_text"] = generated_text
+            out["feedback"] = feedback
+            out["score"] = score
+            processed_output.append(out)
+            logger.debug(out)
+        return processed_output
 
-    def batch_grade(self, messages: List[List[Dict]]) -> List[Dict[str, str]]:
-        grades = []
-        for i in tqdm(range(0, len(messages), self.batch_size), ncols=0):
-            batch_messages = messages[i:i + self.batch_size]
-            completions = asyncio.run(self._batch(batch_messages))
-            grades.extend(self.format_output(completions))
-            time.sleep(self.sleep_time)
-        return grades
+    def _parse_output_absolute(self, output: str) -> Tuple[Optional[str], Optional[int]]:
+        """Copied from prometheus_eval.parser"""
+        pattern = r"""
+            (?:                        # Start of non-capturing group
+                \[RESULT\]|\[SCORE\]|   # Match [RESULT] or [SCORE]
+                Score:?|score:?|        # Match Score: or score:
+                Result:?|\[Result\]:?|  # Match Result: or [Result]:
+                score\s+of              # Match "score of"
+            )                           # End of non-capturing group
+            \s*                         # Allow any whitespace
+            (?:\(|\[|\s)*               # Allow opening brackets or whitespace
+            (\d+)                       # Capture the digit(s)
+            (?:                         # Start of non-capturing group
+                (?:\)|\]|\s|$)|         # Allow closing brackets, whitespace, or end of string
+                (?:/\s*5|               # Allow /5 with optional whitespace
+                   \s*out\s*of\s*5)     # or "out of 5" with flexible whitespace
+            )?                          # End of non-capturing group
+            (?:\s*$)                    # Match from the end of string 
+        """
+        match = re.search(pattern, output, re.IGNORECASE | re.VERBOSE)
 
-    def format_output(self, completions: List[ChatCompletion]) -> List[Dict[str, Any]]:
-        output = []
-        for completion in completions:
-            raw_out = completion.choices[0].message.content
-            try:
-                feedback, score = [s.strip() for s in raw_out.split("[RESULT]")]
-                output.append({
-                    "feedback": feedback,
-                    "score": score
-                })
-            except ValueError as err:
-                logger.warning(f"Malformed model response:\n{err=}\n{completion=}")
-                output.append({
-                    "feedback": raw_out,
-                    "score": None
-                })
-                continue
-        return output
+        if match:
+            result = int(match.group(1))
+            if 1 <= result <= 5:  # Ensure the result is within the valid range
+                feedback = output[: match.start()].strip()
+                return output, result
+        return None, None
+
+
+class PrometheusDataset(Dataset):
+    def __init__(self, examples: List[Dict[str, Any]]):
+        self.examples = examples
+
+    def __len__(self):
+        return len(self.examples)
+
+    def __getitem__(self, idx):
+        return self.examples[idx]
+
+def collate_fn(batch):
+    """Custom collate function to handle batching of dictionary entries"""
+    return batch
 
 
 #############
@@ -336,17 +340,18 @@ def parse_args():
     parser.add_argument("--input-data", required=True, help="")
     parser.add_argument("--output-data", required=True, help="")
     parser.add_argument("--output-dir", required=True, help="Path to save output")
-
+    parser.add_argument("--n-examples", type=int, default=None, help="Number of examples to evaluate")
+    parser.add_argument("--include-reference", action="store_true", default=False, help="Whether to include reference in the prompt")
     parser.add_argument("--dimensions", default=DIMENSIONS, choices=DIMENSIONS, nargs="+")
-    parser.add_argument("--server-base", required=True, help="API endpoint")
-    parser.add_argument("--model-path-base", default="prometheus-eval/prometheus-bgb-8x7b-v2.0")
+    parser.add_argument("--model-path", default="prometheus-eval/prometheus-bgb-8x7b-v2.0")
     parser.add_argument("--repetition_penalty", type=float, default=1.03)
     parser.add_argument("--max-tokens", default=1024, type=int)
     parser.add_argument("--temperature", default=0.9, type=float)
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--top-p", default=1.0, type=float)
-    parser.add_argument("--batch-size", default=8, type=int, help="Number of simultaneous API calls")
-    parser.add_argument("--sleep", default=10, type=int, help="Seconds to sleep between API calls")
+    parser.add_argument("--batch-size", default=4, type=int, help="Number of simultaneous API calls")
+    parser.add_argument("--device", default="auto", choices=["auto", "cpu", "cuda"], help="Device to run model on")
+    parser.add_argument("--torch-dtype", default="bfloat16", choices=["float32", "float16", "bfloat16", "auto"], help="PyTorch dtype for model")
     return parser.parse_args()
 
 
@@ -359,62 +364,53 @@ def main():
         logger.error(f"Output data {args.output_data} does not exist.")
         exit(0)
 
-    # 1. Load the data
-    dataset = {"source": [], "predictions": [], "reference": []}
-    for example in load_generations(args.input_data, args.output_data):
-        dataset["source"].append(example["source"])
-        dataset["predictions"].append(example["generated"])
-        dataset["reference"].append(example["target"])
+    # Save args
+    os.makedirs(args.output_dir, exist_ok=True)
+    with open(f"{args.output_dir}/prometheus_args.json", 'w') as f:
+        json.dump(vars(args), f)
 
-    # 2. Initialize evaluator
+    # 1. Load the data
+    full_dataset = [d for d in load_generations(args.input_data, args.output_data)]
+    if args.n_examples is not None and args.n_examples < len(full_dataset):
+        sampled_examples = random.sample(full_dataset, args.n_examples)
+        logger.info(f"Sampled {len(sampled_examples)} examples.")
+    else:
+        sampled_examples = full_dataset
+
+    # 2. Create dataset and dataloader
+    dataset = PrometheusDataset(sampled_examples)
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        collate_fn=collate_fn
+    )
+
+    # 3. Initialize evaluator
     evaluator = PrometheusEvaluator(
-        model_name=args.model_path_base,
-        api_base=args.server_base,
+        model_name=args.model_path,
         batch_size=args.batch_size,
         temperature=args.temperature,
         max_tokens=args.max_tokens,
         seed=args.seed,
         top_p=args.top_p,
         repetition_penalty=args.repetition_penalty,
-        sleep_time=args.sleep
+        dimensions=args.dimensions,
+        device=args.device,
+        torch_dtype=args.torch_dtype,
+        include_reference=args.include_reference
     )
 
-    # 3. Run evaluation
-    include_source = True
-    include_reference = True
-    for dimension in args.dimensions:
-        output_file = f"{args.output_dir}/prometheus_eval{'_source' if include_source else ''}{'_ref' if include_reference else ''}_{dimension}.jsonl"
-        if os.path.exists(output_file):
-            logger.warning(f"{output_file} exists. Skipping.")
-            continue
-
-        if include_source:
-            instruction = []
-            for source_docs in dataset["source"]:
-                docs = "\n\nDocument: ".join(source_docs)
-                docs = "Document: " + docs
-                ins = INSTRUCTION.format(source=docs)
-                instruction.append(ins)
-        else:
-            instruction = INSTRUCTION_WO_SOURCE
-        results = evaluator.absolute_grade(
-            generation=dataset["predictions"],
-            reference_generation=dataset["reference"] if include_reference else None,
-            instruction=instruction,
-            rubric_data=RUBRICS[dimension]
-        )
-
-        # Save results
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
-        with jsonlines.open(output_file, 'w') as f:
-            for pred, ref, result in zip(dataset["predictions"], dataset["reference"], results):
-                f.write({
-                    "prediction": pred,
-                    "reference": ref,
-                    "score": result["score"],
-                    "feedback": result["feedback"]
-                })
-        logger.info(f"Wrote output to {output_file}")
+    # 4. Run evaluation in batches
+    # Save for each batch
+    output_file = os.path.join(args.output_dir, "prometheus_outputs.jsonl")
+    if args.include_reference:
+        output_file = output_file.replace(".jsonl", "_with_ref.jsonl")
+    with jsonlines.open(output_file, 'w') as writer:
+        for batch in tqdm(dataloader, desc="Processing batches"):
+            batch_results = evaluator.batch_generate(batch)
+            writer.write_all(batch_results)
+    logger.info(f"Wrote output to {output_file}")
 
 
 if __name__ == "__main__":

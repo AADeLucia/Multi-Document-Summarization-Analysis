@@ -258,7 +258,7 @@ eval_generations() {
 
   python "${MDS}/code/evaluate_generations.py" \
     --input-data "${input}" \
-    --output-data "${output}/generated.jsonl" \
+    --output-data "${output}/generated_with_ids.jsonl" \
     --output-dir "${output}" \
     --metrics "${metrics[@]}" \
     ${overwrite_flag}

@@ -189,47 +189,23 @@ def clean_score(score: object):
 
 
 def eval_prometheus(output_dir: str) -> Optional[Dict[str, Any]]:
-    output_file = f"{output_dir}/prometheus_aggregated2.json"
-    logger.warning(f"Aggregating Prometheus scores.")
-    individual_scores = {}
-    for filename in os.listdir(output_dir):
-        if "prometheus_eval" not in filename:
-            continue
-
-        # Skip non-source and non-reference results
-        if ("source" not in filename) or ("ref" not in filename):
-            continue
-        dimension = filename.split("_")[-1].strip(".jsonl")
-
-        df = pd.read_json(
-            os.path.join(output_dir, filename),
-            lines=True
-        )
-
-        df = df.reset_index().rename(columns={"index": "id"})
-        df["score"] = df.score.map(clean_score)#.astype(dtype='Int64')
-        individual_scores[dimension] = df["score"].values
-
-    if not len(individual_scores):
+    prometheus_file = f"{output_dir}/prometheus_outputs_with_ref.jsonl"
+    if not os.path.exists(prometheus_file):
+        logger.warning(f"Prometheus results not found at {prometheus_file}. Skipping.")
         return
 
-    # Scores are calculated for individual documents. Aggregate them.
+    # Separate the results by dimension
+    # Results look like {"id": 52441, "dimension": str, "score": int, "feedback": str, "prompt": str, "generated_text": str}
+    df = pd.read_json(prometheus_file, lines=True)[["id", "dimension", "score"]]# Pivot the dataframe so each dimension becomes a column
+    df_pivoted = df.pivot(index='id', columns='dimension', values='score')
+    individual_scores = df_pivoted.to_dict(orient='index').values()
+    individual_scores = list(individual_scores)
+    overall_scores = df_pivoted.mean().to_dict()
+
     aggregated_scores = {
-        "overall": {
-            k: np.nanmean(v) for k, v in individual_scores.items()
-        }
+        "individual": individual_scores,
+        "overall": overall_scores,
     }
-    # Re-group the individual scores
-    regrouped_scores = []
-    for idx in range(len(df)):
-        regrouped_scores.append({
-            k: v[idx] for k, v in individual_scores.items()
-        })
-    aggregated_scores["individual"] = regrouped_scores
-
-    with open(output_file, "w") as f:
-        json.dump(aggregated_scores, f, cls=CustomJSONEncoder)
-
     return aggregated_scores
 
 

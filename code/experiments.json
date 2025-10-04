@@ -16,9 +16,9 @@
     "ICL-multinews_plus"
   ],
   "datasets": [
+    "multinews_plus",
     "convosumm/reddit",
-    "multixscience",
-    "multinews_plus"
+    "multixscience"
   ],
   "splits": [
     "test"

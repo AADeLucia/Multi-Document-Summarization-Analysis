@@ -50,6 +50,13 @@ def load_generations(input_path: str, predictions_path: str) -> Iterable[Dict[st
         for doc in reader:
             generated.append(doc)
 
+    # Sort both lists by ID to ensure proper matching
+    dataset.sort(key=lambda x: x["id"])
+    generated.sort(key=lambda x: x["id"])
+
+    if dataset[0]["id"] != generated[0]["id"]:
+        raise Exception(f"Mismatch in IDs between source ({input_path}) and predicted ({predictions_path}): {dataset[0]['id']} != {generated[0]['id']}")
+
     if len(dataset) != len(generated):
         raise Exception(f"Mismatch in number of examples between source ({input_path}) ({len(dataset)}) and predicted ({predictions_path}) ({len(generated)})")
 

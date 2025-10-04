@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --nodes=1
-#SBATCH --time=06:00:00
+#SBATCH --time=03:00:00
 #SBATCH --job-name=mds-pipe
 #SBATCH --partition=a100,h100
 #SBATCH --cpus-per-task=8
@@ -31,8 +31,8 @@ export CUDA_LAUNCH_BLOCKING=1
 # Experiment settings for this task
 # depends on the SLURM_ARRAY_TASK_ID
 if [ -z "${SLURM_ARRAY_TASK_ID+x}" ]; then
-  SLURM_ARRAY_TASK_ID=6
-  SLURM_ARRAY_TASK_MAX=2
+  SLURM_ARRAY_TASK_ID=1
+  SLURM_ARRAY_TASK_MAX=1
 fi
 CONFIG="${MDS}/code/experiments.json"
 params=$(sed -n ${SLURM_ARRAY_TASK_ID}p "${MDS}/code/experiment_array.jsonl")
@@ -43,8 +43,6 @@ mkdir -p "${OUTPUT_BASE}"
 
 DO_PREDICT=false
 DO_EVAL=true
-
-METRICS=( "moverscore" "bertscore" )
 
 for split in "${SPLITS[@]}"; do
   INPUT="${MDS}/data/${DATASET}/${split}.jsonl"
